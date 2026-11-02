@@ -1806,6 +1806,15 @@ class Api:
         if body.get("stop"):
             self.db.stop_courier_app_location(user.id)
             return {"ok": True, "live": self.db.courier_live(courier)}
+        # Keep the legacy Telegram client working when it requests the old
+        # chat-based location flow without coordinates. Standalone APK always
+        # sends its first GPS point and never opens a bot chat.
+        if body.get("lat") is None or body.get("lon") is None:
+            link = await self.bridge.bot_link()
+            if link:
+                await self._safe(self.bridge.courier_live_instruction(user.id), "инструкция по геопозиции")
+                return {"ok": True, "link": link}
+            raise ApiError(400, "Передайте координаты геопозиции.")
         try:
             lat, lon = float(body.get("lat")), float(body.get("lon"))
         except (TypeError, ValueError):
@@ -4004,12 +4013,3 @@ class Api:
         Скриншоты оплат сюда намеренно НЕ входят — они видны только админу в Telegram."""
         if kind == "product":
             product = self.db.get_product(int(ident)) if ident.isdigit() else None
-            return product["photo_file_id"] if product and product["is_active"] else None
-        if kind == "qr" and ident in ("sbp", "crypto"):
-            return self.db.get_payment_qr(ident)
-        if kind == "catalog":
-            return self.db.get_catalog_photo()
-        if kind == "payqr" and ident.isdigit():
-            code = self.db.get_payment_qr_code(int(ident))
-            return code["file_id"] if code else None
-        return None
