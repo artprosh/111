@@ -1,6 +1,5 @@
-/* Relax Gas — Telegram Mini App.
-   Чистый JS без сборки. Все данные — через /api (webapp/core.py), авторизация —
-   подписанная Telegram initData в заголовке Authorization: tma <initData>. */
+/* Relax Gas — web client shared by Telegram and the standalone mobile app.
+   Data uses /api; standalone sessions are held in a Secure HttpOnly cookie. */
 (() => {
   'use strict';
 
@@ -765,10 +764,16 @@
           ? `<button class="tile wide" data-go="referral">${tileIco('⭐', 'bonus')}<span><div class="lbl">Моя реферальная программа</div><div class="sub">🤝 моя ссылка и баллы</div></span><b class="tile-val" data-partner-points>${Number(me.partner.points).toLocaleString('ru-RU')}</b></button>`
           : `<button class="tile wide" data-go="referral">${tileIco('🤝', 'partner')}<span><div class="lbl">Партнёрская программа</div></span></button>`}
         <div data-homescreen></div>
+        ${!tg ? '<button class="btn ghost" data-signout>Выйти из аккаунта</button>' : ''}
         ${APP_VERSION ? `<div class="small muted center app-version">версия ${esc(APP_VERSION)}</div>` : ''}
       </div>`;
     view.querySelectorAll('[data-go]').forEach((b) => { b.onclick = () => { haptic('light'); go(b.dataset.go); }; });
     view.querySelectorAll('[data-mode]').forEach((b) => { b.onclick = () => switchMode(b.dataset.mode); });
+    const signout = view.querySelector('[data-signout]');
+    if (signout) signout.onclick = async () => {
+      try { await fetch('/api/auth/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); } catch (e) { /* logout locally even if server is offline */ }
+      window.location.reload();
+    };
     decorateTiles(view);
     homeScreenButton(view);
     applyBadges();
@@ -5056,6 +5061,74 @@
     return true;
   }
 
+  async function showStandaloneLogin() {
+    view.innerHTML = `<section class="card" style="max-width:440px;margin:8vh auto;padding:22px">
+      <h2 style="margin-top:0">Вход в Relax Gas</h2>
+      <p class="muted">Введите телефон. Мы отправим одноразовый код по SMS.</p>
+      <label class="field">Телефон<input id="login-phone" type="tel" autocomplete="tel" inputmode="tel" placeholder="+7 900 000-00-00"></label>
+      <button class="btn mt" id="login-send">Получить код</button>
+      <div id="login-code-area" hidden>
+        <label class="field mt">Код из SMS<input id="login-code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000"></label>
+        <label class="field mt">Ваше имя <span class="muted">(только при первом входе)</span><input id="login-name" type="text" autocomplete="given-name" maxlength="64" placeholder="Имя"></label>
+        <button class="btn mt" id="login-confirm">Войти</button>
+        <button class="btn ghost mt" id="login-resend">Отправить код ещё раз</button>
+      </div>
+      <div class="small muted mt">Продолжая, вы подтверждаете, что этот номер принадлежит вам.</div>
+    </section>`;
+    const phone = view.querySelector('#login-phone');
+    const codeArea = view.querySelector('#login-code-area');
+    const send = view.querySelector('#login-send');
+    const resend = view.querySelector('#login-resend');
+    const confirm = view.querySelector('#login-confirm');
+    const post = async (path, data) => {
+      const response = await fetch(path, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin', body: JSON.stringify(data),
+      });
+      let result = {};
+      try { result = await response.json(); } catch (e) { /* пустой ответ */ }
+      if (!response.ok) throw new Error(result.error || `Ошибка ${response.status}`);
+      return result;
+    };
+    const requestCode = async (button) => {
+      button.disabled = true;
+      try {
+        await post('/api/auth/request-code', { phone: phone.value });
+        codeArea.hidden = false;
+        view.querySelector('#login-code').focus();
+        toast('Код отправлен по SMS.');
+      } catch (e) {
+        toast(e.message || 'Не удалось отправить код.', true);
+      } finally {
+        setTimeout(() => { if (button.isConnected) button.disabled = false; }, 30000);
+      }
+    };
+    send.onclick = () => requestCode(send);
+    resend.onclick = () => requestCode(resend);
+    confirm.onclick = async () => {
+      confirm.disabled = true;
+      try {
+        await post('/api/auth/verify-code', {
+          phone: phone.value,
+          code: view.querySelector('#login-code').value,
+          name: view.querySelector('#login-name').value,
+        });
+        await loadMe();
+        startAuthenticatedApp();
+      } catch (e) {
+        toast(e.message || 'Не удалось войти.', true);
+      } finally {
+        if (confirm.isConnected) confirm.disabled = false;
+      }
+    };
+  }
+
+  function startAuthenticatedApp() {
+    window.addEventListener('hashchange', render);
+    startBadgePolling();
+    render();
+  }
+
   async function boot() {
     if (tg) {
       try { tg.ready(); tg.expand(); } catch (e) { /* */ }
@@ -5067,7 +5140,14 @@
     if (!(tg && tg.initData)) {
       const isDev = await setupDevBar();
       if (!isDev) {
-        view.innerHTML = '<div class="empty"><div class="big">📱</div>Откройте приложение из Telegram — кнопкой «🖥 Открыть приложение» в боте.</div>';
+        try {
+          await loadMe();
+        } catch (e) {
+          if (e.status === 401) { await showStandaloneLogin(); return; }
+          view.innerHTML = `<div class="empty"><div class="big">⚠️</div>${esc(e.message)}</div>`;
+          return;
+        }
+        startAuthenticatedApp();
         return;
       }
     }
@@ -5077,9 +5157,7 @@
       view.innerHTML = `<div class="empty"><div class="big">⚠️</div>${esc(e.message)}</div>`;
       return;
     }
-    window.addEventListener('hashchange', render);
-    startBadgePolling();
-    render();
+    startAuthenticatedApp();
   }
 
   boot();

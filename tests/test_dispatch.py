@@ -6,6 +6,7 @@ import asyncio
 import base64
 import hashlib
 import io
+import os
 import sys
 import tarfile
 import tempfile
@@ -14,6 +15,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+os.environ.setdefault("DANGER_PASSWORD", "AdminGas")  # test-only; production must configure a private secret
 
 try:
     from aiohttp.test_utils import TestClient, TestServer

@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 import asyncio
 import base64
 import json
+import os
 import sys
 import tempfile
 import time
@@ -17,6 +18,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+os.environ.setdefault("DANGER_PASSWORD", "AdminGas")  # test-only; production must configure a private secret
 
 import dev_server  # noqa: E402
 from webapp.auth import InitDataError, TelegramUser, sign_init_data, validate_init_data  # noqa: E402

@@ -8,8 +8,8 @@ build:
   requirementsPath: requirements.txt
 
 run:
-  scriptName: main.py
+  scriptName: standalone_server.py
   persistenceMount: /data
-  # Порт, на котором слушает веб-сервер Mini App (WEBAPP_PORT, по умолчанию 80).
+  # Порт, на котором слушает сервер standalone-приложения.
   # https://docs.amvera.ru/applications/environments/python-pip.html
   containerPort: 80

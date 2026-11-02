@@ -63,7 +63,7 @@ class _Assets:
         return hit[1], hit[2], hit[3]
 
 
-def create_app(api: Api, bridge, bot_token: str) -> web.Application:
+def create_app(api: Api, bridge, bot_token: str | None, auth_service=None) -> web.Application:
     app = web.Application(client_max_size=MAX_BODY)
 
     async def index(request: web.Request) -> web.StreamResponse:
@@ -92,12 +92,18 @@ def create_app(api: Api, bridge, bot_token: str) -> web.Application:
 
     async def api_handler(request: web.Request) -> web.Response:
         auth = request.headers.get("Authorization", "")
-        if not auth.startswith("tma "):
-            return _json({"error": "Откройте приложение из Telegram."}, 401)
-        try:
-            user = validate_init_data(auth[4:], bot_token)
-        except InitDataError as exc:
-            return _json({"error": f"Не удалось проверить вход: {exc}. Откройте приложение заново."}, 401)
+        if auth_service is not None:
+            token = auth[7:].strip() if auth.startswith("Bearer ") else request.cookies.get("app_session", "")
+            user = auth_service.user_for_token(token)
+            if user is None:
+                return _json({"error": "Сеанс истёк. Войдите снова."}, 401)
+        else:
+            if not auth.startswith("tma ") or not bot_token:
+                return _json({"error": "Откройте приложение из Telegram."}, 401)
+            try:
+                user = validate_init_data(auth[4:], bot_token)
+            except InitDataError as exc:
+                return _json({"error": f"Не удалось проверить вход: {exc}. Откройте приложение заново."}, 401)
         body = {}
         if request.method in ("POST", "PUT", "PATCH") and request.can_read_body:
             try:
@@ -115,6 +121,53 @@ def create_app(api: Api, bridge, bot_token: str) -> web.Application:
             return _json({"error": "Внутренняя ошибка. Попробуйте ещё раз."}, 500)
         return _json(result)
 
+    async def standalone_auth(request: web.Request) -> web.Response:
+        if auth_service is None:
+            return _json({"error": "Этот способ входа не включён."}, 404)
+        action = request.match_info["action"]
+        body = {}
+        if request.can_read_body:
+            try:
+                body = await request.json()
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                return _json({"error": "Некорректный JSON."}, 400)
+            if not isinstance(body, dict):
+                return _json({"error": "Некорректный JSON."}, 400)
+        try:
+            if action == "request-code" and request.method == "POST":
+                result = await auth_service.request_code(body.get("phone"), request.remote)
+                return _json(result)
+            if action == "verify-code" and request.method == "POST":
+                result = auth_service.verify_code(body.get("phone"), body.get("code"), body.get("name"))
+                response = _json({
+                    "ok": True,
+                    "user": {
+                        "id": result.user.id,
+                        "first_name": result.user.first_name,
+                        "last_name": result.user.last_name,
+                    },
+                })
+                response.set_cookie(
+                    "app_session", result.token, max_age=30 * 24 * 60 * 60,
+                    httponly=True, secure=True, samesite="Strict", path="/",
+                )
+                return response
+            if action == "logout" and request.method == "POST":
+                header = request.headers.get("Authorization", "")
+                if header.startswith("Bearer "):
+                    auth_service.logout(header[7:].strip())
+                token = request.cookies.get("app_session", "")
+                auth_service.logout(token)
+                response = _json({"ok": True})
+                response.del_cookie("app_session", path="/", secure=True, httponly=True, samesite="Strict")
+                return response
+            return _json({"error": "Не найдено."}, 404)
+        except Exception as exc:
+            if hasattr(exc, "status") and hasattr(exc, "message"):
+                return _json({"error": exc.message}, exc.status)
+            logger.exception("Standalone login failed")
+            return _json({"error": "Не удалось обработать запрос входа."}, 500)
+
     app.router.add_get("/", index)
     # 🖥 Диспетчерская карта для ПК: /dispatch (вход без Telegram) — webapp/dispatch_web.py
     from .dispatch_web import add_dispatch_routes
@@ -122,6 +175,7 @@ def create_app(api: Api, bridge, bot_token: str) -> web.Application:
     add_dispatch_routes(app, api)
     app.router.add_get("/healthz", healthz)
     app.router.add_get("/api/media/{kind}/{ident}", media)
+    app.router.add_route("*", "/api/auth/{action}", standalone_auth)
 
     async def export_file(request: web.Request) -> web.Response:
         # Без заголовка Authorization: файл скачивает сам Telegram (downloadFile)
@@ -175,8 +229,10 @@ def create_app(api: Api, bridge, bot_token: str) -> web.Application:
     return app
 
 
-async def start_webapp(api: Api, bridge, bot_token: str, host: str, port: int) -> web.AppRunner:
-    app = create_app(api, bridge, bot_token)
+async def start_webapp(
+    api: Api, bridge, bot_token: str | None, host: str, port: int, auth_service=None
+) -> web.AppRunner:
+    app = create_app(api, bridge, bot_token, auth_service=auth_service)
     runner = web.AppRunner(app, access_log=None)
     await runner.setup()
     site = web.TCPSite(runner, host=host, port=port)

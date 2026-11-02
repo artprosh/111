@@ -18,6 +18,7 @@ import binascii
 import hashlib
 import logging
 import math
+import os
 import re
 import secrets
 import time
@@ -96,8 +97,8 @@ ADMIN_STATUS_TARGETS = {"new", "in_transit", "delivered", "cancelled"}
 QUOTE_TTL = 15 * 60  # столько же, сколько USDT_RATE_MAX_AGE в main.py
 COURIER_ARRIVED_COOLDOWN = 60  # как в main.py
 MAX_CUSTOMER_NOTE = 500
-# Как DANGER_PASSWORD в main.py: удаление всех товаров / всей истории заказов.
-DANGER_PASSWORD = "AdminGas"  # единый пароль всех запароленных кнопок (с учётом регистра)
+# Пароль для необратимых действий задаётся только в секретах сервера.
+DANGER_PASSWORD = os.getenv("DANGER_PASSWORD", "")
 # Пароль кнопки «Выгрузка в Excel».
 EXPORT_PASSWORD = DANGER_PASSWORD
 EXPORT_TTL = 10 * 60  # ссылка на скачивание файла живёт 10 минут
@@ -3614,7 +3615,9 @@ class Api:
 
         from .export import MSK, build_xlsx, msk
 
-        if str(body.get("password") or "").strip() != EXPORT_PASSWORD:
+        if not EXPORT_PASSWORD:
+            raise ApiError(503, "Защитный пароль не настроен на сервере.")
+        if not secrets.compare_digest(str(body.get("password") or "").strip(), EXPORT_PASSWORD):
             raise ApiError(403, "Неверный пароль выгрузки.")
         # Выгрузка всегда общая — с первого заказа до последнего; нужные даты
         # владелец выбирает фильтром в самой таблице (суточная убрана 18.10).
@@ -3703,7 +3706,9 @@ class Api:
         return {"ok": True}
 
     def _check_danger_password(self, body: dict[str, Any]) -> None:
-        if str(body.get("password") or "").strip() != DANGER_PASSWORD:
+        if not DANGER_PASSWORD:
+            raise ApiError(503, "Защитный пароль не настроен на сервере.")
+        if not secrets.compare_digest(str(body.get("password") or "").strip(), DANGER_PASSWORD):
             raise ApiError(403, "Неверный пароль.")
 
     async def admin_wipe_products(self, user, body, query) -> dict[str, Any]:

@@ -71,9 +71,7 @@ public final class MainActivity extends Activity {
         input.setHint("https://app.example.com");
         input.setTextColor(0xffffffff);
         input.setHintTextColor(0xff94a3b8);
-        input.setInputType( Uri.parse("https://example.com").getScheme().equals("https")
-            ? android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI
-            : android.text.InputType.TYPE_CLASS_TEXT);
+        input.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_URI);
         LinearLayout.LayoutParams inputParams = new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         inputParams.topMargin = 20;
@@ -119,6 +117,9 @@ public final class MainActivity extends Activity {
                 Uri target = request.getUrl();
                 if (target.getHost() != null && target.getHost().equalsIgnoreCase(baseHost)
                     && "https".equalsIgnoreCase(target.getScheme())) return false;
+                if ("https".equalsIgnoreCase(target.getScheme()) || "tel".equalsIgnoreCase(target.getScheme())) {
+                    try { startActivity(new Intent(Intent.ACTION_VIEW, target)); } catch (Exception ignored) { }
+                }
                 return true;
             }
         });

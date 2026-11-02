@@ -1,4 +1,8 @@
-# Relax Gas — бот + Telegram Mini App
+# Relax Gas — standalone mobile app and order API
+
+This working copy is being adapted to run without Telegram. The Android client is in `android/`; `standalone_server.py` serves the existing app and order API with phone/SMS login. The legacy Telegram entry point remains in the source tree for reference but is not started by the standalone Amvera configuration.
+
+Before deployment, configure `APP_ADMIN_ID`, `APP_ADMIN_PHONE`, `APP_AUTH_SECRET`, `SMSRU_API_ID`, `DANGER_PASSWORD`, and `APP_PUBLIC_URL` in the hosting dashboard. Never commit these values.
 
 Копия бота из [`artprosh/gas-delivery-bot`](https://github.com/artprosh/gas-delivery-bot)
 (коммит `716e0ba`) плюс Telegram Mini App — тот же магазин в виде приложения внутри Telegram.
@@ -21,7 +25,7 @@
 
 ## Выгрузка продаж в Excel
 
-Админка → «⚙️ Ещё» → «📊 Выгрузка в Excel» (пароль `AdminGas`, проверяется сервером; тот же пароль — у удаления всех товаров и сброса истории заказов, в приложении и в боте).
+Админка → «⚙️ Ещё» → «📊 Выгрузка в Excel» (пароль задаётся через секрет `DANGER_PASSWORD` на сервере; тот же пароль защищает удаление всех товаров и сброс истории заказов).
 Строка = товар или услуга («Подъём на этаж») из **доставленного** заказа, по времени
 размещения: «Дата, Время, Товар / услуга, Количество, Сумма, Примечание»; внизу «ИТОГО» —
 формулы `SUM`. **Суточная** — с 12:00 до 12:00 по Москве (по умолчанию последние завершённые
