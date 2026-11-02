@@ -1,0 +1,15 @@
+meta:
+  environment: python
+  toolchain:
+    name: pip
+    version: 3.11
+
+build:
+  requirementsPath: requirements.txt
+
+run:
+  scriptName: standalone_server.py
+  persistenceMount: /data
+  # Порт, на котором слушает сервер standalone-приложения.
+  # https://docs.amvera.ru/applications/environments/python-pip.html
+  containerPort: 80

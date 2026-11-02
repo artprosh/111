@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Диспетчерская карта · Relax Gas</title>
+  <link rel="stylesheet" href="/static/dispatch.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">🖥 Диспетчерская <span class="muted">· Relax Gas</span></div>
+    <div class="top-stats" data-stats></div>
+    <div class="bomb" data-bomb hidden title="Сколько ещё действует вход по ссылке (часы:минуты)">
+      <span class="bomb-label">Срок работы ссылки</span>
+      <span class="bomb-digits" data-bomb-digits>--:--</span>
+    </div>
+    <div class="who">
+      <span data-who></span>
+      <button class="btn ghost" data-logout>Выйти</button>
+      <button class="btn ghost" data-logout-all title="Закрыть вход на всех компьютерах">Выйти везде</button>
+    </div>
+  </header>
+  <main class="layout">
+    <section class="map-wrap">
+      <div class="map" data-map></div>
+      <div class="map-hint">Клик — выбрать заказ · <b>Shift + рамка</b> — выбрать несколько · клик по курьеру — его карточка</div>
+      <div class="map-legend">
+        <span><i class="o free"></i>Не назначен</span>
+        <span><i class="o busy"></i>У курьера</span>
+        <span><i class="o time"></i>Ко времени</span>
+        <span><i class="o ind"></i>Индивидуальный</span>
+        <span><i class="c"></i>Курьер (бледный — нет свежей точки / перерыв)</span>
+      </div>
+      <div class="map-note" data-map-note hidden></div>
+      <div class="refresh" data-refresh></div>
+    </section>
+    <aside class="panel">
+      <div class="filters">
+        <div class="f-row" data-f-regions></div>
+        <div class="f-row" data-f-status></div>
+      </div>
+      <div class="selbar" data-selbar hidden></div>
+      <div class="detail" data-detail hidden></div>
+      <nav class="tabs" data-tabs>
+        <button data-tab="orders" class="on">Заказы <b data-count="orders">0</b></button>
+        <button data-tab="couriers">Курьеры <b data-count="couriers">0</b></button>
+        <button data-tab="nopoint">Без точки <b data-count="nopoint">0</b></button>
+      </nav>
+      <div class="list" data-list></div>
+    </aside>
+  </main>
+  <div class="overlay" data-overlay hidden></div>
+  <div class="toast" data-toast hidden></div>
+  <script src="/static/dispatch.js"></script>
+</body>
+</html>
