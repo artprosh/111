@@ -1,0 +1,15 @@
+meta:
+  environment: python
+  toolchain:
+    name: pip
+    version: 3.11
+
+build:
+  requirementsPath: requirements.txt
+
+run:
+  scriptName: main.py
+  persistenceMount: /data
+  # Порт, на котором слушает веб-сервер Mini App (WEBAPP_PORT, по умолчанию 80).
+  # https://docs.amvera.ru/applications/environments/python-pip.html
+  containerPort: 80

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <title>Relax Gas</title>
+  <!-- Официальный SDK Telegram Mini Apps: https://core.telegram.org/bots/webapps -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <!-- Засечный шрифт заголовков премиум-кнопок (Google Fonts, кириллица) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- Не блокирует показ приложения: пока шрифт грузится (или если Google недоступен), — системный. -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&display=swap&subset=cyrillic" media="print" onload="this.media='all'">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div id="dev-bar" class="dev-bar" hidden></div>
+  <header class="topbar" id="topbar">
+    <button class="icon-btn" id="back-btn" aria-label="Назад" hidden>
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <div class="topbar-title" id="title">Relax Gas</div>
+    <button class="menu-pill" id="home-btn" hidden>🏠 Меню</button>
+    <button class="cart-pill" id="cart-pill" hidden>
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M3 4h2l2.4 11.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.5L21 8H6.2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="10" cy="20" r="1.4" fill="currentColor"/><circle cx="17" cy="20" r="1.4" fill="currentColor"/></svg>
+      <span id="cart-count">0</span>
+    </button>
+  </header>
+  <main id="view" class="view" aria-live="polite"></main>
+  <div id="sheet-backdrop" class="sheet-backdrop" hidden></div>
+  <section id="sheet" class="sheet" hidden></section>
+  <!-- Режимы курьера/админа: «Войти как покупатель» всегда внизу. -->
+  <div id="mode-bar" class="mode-bar" hidden></div>
+  <div id="toast" class="toast" role="status" hidden></div>
+  <!-- Окно обязательной оценки курьера: поверх всего, закрыть нельзя. -->
+  <div id="gate" class="gate" hidden></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

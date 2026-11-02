@@ -1,0 +1,61 @@
+# База адресов Москвы и области из OpenStreetMap для подсказок при оформлении заказа.
+# Собирается только по запросу: кнопка администратора в приложении
+# («⚙️ Ещё» → «🛠 Обновить карты») или вручную: Actions → «Address database» → Run workflow
+# и публикуется в Releases этого репозитория под тегом address-db.
+# Сервер на Amvera скачивает её оттуда сам (переменная GEODB_GITHUB_TOKEN).
+# Данные © участники OpenStreetMap, ODbL — https://www.openstreetmap.org/copyright
+name: Address database
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: address-db
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install osmium-tool
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq osmium-tool
+
+      - name: Download Central Federal District (Geofabrik)
+        run: |
+          curl -fsSL --retry 3 -o cfd.osm.pbf \
+            https://download.geofabrik.de/russia/central-fed-district-latest.osm.pbf
+          ls -lh cfd.osm.pbf
+
+      - name: Cut Moscow + Moscow Oblast, keep addresses and the Moscow boundary
+        run: |
+          osmium extract --bbox 35.1,54.2,40.3,57.0 cfd.osm.pbf -o mo.osm.pbf --overwrite
+          osmium tags-filter mo.osm.pbf nwr/addr:housenumber r/admin_level=4 w/short_name=ТТК "w/name=Третье транспортное кольцо" -o addr.osm.pbf --overwrite
+          osmium export addr.osm.pbf -f geojsonseq -o addr.geojsonseq --overwrite
+          ls -lh mo.osm.pbf addr.osm.pbf addr.geojsonseq
+
+      - name: Build SQLite database
+        run: |
+          set -o pipefail  # ошибка сборки не должна теряться из-за tee
+          python3 tools/build_address_db.py addr.geojsonseq addresses.sqlite \
+            "OpenStreetMap via Geofabrik central-fed-district-latest, $(date -u +%Y-%m-%d)" | tee build_info.json
+          gzip -9 -k addresses.sqlite
+          ls -lh addresses.sqlite addresses.sqlite.gz
+
+      - name: Publish to release «address-db»
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view address-db >/dev/null 2>&1; then
+            gh release create address-db --title "База адресов (OpenStreetMap)" \
+              --notes "Адреса Москвы и Московской области для подсказок в приложении. Данные © участники OpenStreetMap, ODbL. Обновляется автоматически." \
+              --latest=false
+          fi
+          gh release upload address-db addresses.sqlite.gz --clobber
+          STATS=$(python3 -c "import json; d=json.load(open('build_info.json')); print('домов', d['houses'], '· в Москве', d['moscow_houses'], '· улиц', d['streets'], '· точек ТТК', d.get('ttk_points', 0))")
+          gh release edit address-db --notes "Адреса Москвы и Московской области для подсказок в приложении. Данные © участники OpenStreetMap, ODbL. Сборка по запросу, последняя: $(date -u '+%Y-%m-%d %H:%M UTC'). ${STATS}."
