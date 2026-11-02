@@ -7,11 +7,14 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.GeolocationPermissions;
+import android.webkit.CookieManager;
+import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -27,6 +30,8 @@ import android.widget.Toast;
 public final class MainActivity extends Activity {
     private static final int LOCATION_REQUEST = 42;
     private static final int FILE_REQUEST = 43;
+    private static final int SERVICE_LOCATION_REQUEST = 44;
+    private static final int NOTIFICATION_REQUEST = 45;
     private static final String PREFS = "relaxgas";
     private static final String KEY_URL = "server_url";
 
@@ -35,6 +40,7 @@ public final class MainActivity extends Activity {
     private String pendingGeoOrigin;
     private ValueCallback<Uri[]> pendingFile;
     private String baseHost;
+    private String appUrl;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -103,6 +109,7 @@ public final class MainActivity extends Activity {
             return;
         }
         baseHost = uri.getHost();
+        appUrl = url;
         web = new WebView(this);
         WebSettings settings = web.getSettings();
         settings.setJavaScriptEnabled(true);
@@ -111,6 +118,7 @@ public final class MainActivity extends Activity {
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(true);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+        web.addJavascriptInterface(new CourierLocationBridge(), "RelaxGasNative");
         web.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
@@ -151,6 +159,43 @@ public final class MainActivity extends Activity {
         web.loadUrl(url);
     }
 
+    private final class CourierLocationBridge {
+        @JavascriptInterface
+        public void startCourierLocation() {
+            runOnUiThread(MainActivity.this::requestCourierLocationPermissions);
+        }
+
+        @JavascriptInterface
+        public void stopCourierLocation() {
+            runOnUiThread(() -> stopService(CourierLocationService.stopIntent(MainActivity.this)));
+        }
+    }
+
+    private void requestCourierLocationPermissions() {
+        boolean locationGranted = checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            || checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+        if (!locationGranted) {
+            requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION}, SERVICE_LOCATION_REQUEST);
+            return;
+        }
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, NOTIFICATION_REQUEST);
+            return;
+        }
+        startCourierLocationService();
+    }
+
+    private void startCourierLocationService() {
+        String cookie = CookieManager.getInstance().getCookie(appUrl);
+        if (cookie == null || cookie.isEmpty()) {
+            Toast.makeText(this, "Сначала войдите в приложение по SMS.", Toast.LENGTH_LONG).show();
+            return;
+        }
+        Intent intent = CourierLocationService.startIntent(this, appUrl, cookie);
+        if (Build.VERSION.SDK_INT >= 26) startForegroundService(intent);
+        else startService(intent);
+    }
+
     @Override
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(requestCode, permissions, results);
@@ -160,6 +205,15 @@ public final class MainActivity extends Activity {
             pendingGeo.invoke(pendingGeoOrigin, granted, false);
             pendingGeo = null;
             pendingGeoOrigin = null;
+        } else if (requestCode == SERVICE_LOCATION_REQUEST) {
+            boolean granted = false;
+            for (int result : results) if (result == PackageManager.PERMISSION_GRANTED) granted = true;
+            if (granted) requestCourierLocationPermissions();
+            else Toast.makeText(this, "Для работы курьера разрешите геопозицию.", Toast.LENGTH_LONG).show();
+        } else if (requestCode == NOTIFICATION_REQUEST) {
+            boolean granted = results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED;
+            if (granted) startCourierLocationService();
+            else Toast.makeText(this, "Разрешите уведомление, чтобы видеть, когда передаётся геопозиция.", Toast.LENGTH_LONG).show();
         }
     }
 
